@@ -21,13 +21,6 @@ stages:
     steps:
     - checkout: self
 
-    # Step 1: Configure AWS credentials (stored securely in Azure DevOps)
-    - script: |
-        aws configure set aws_access_key_id $(AWS_ACCESS_KEY_ID)
-        aws configure set aws_secret_access_key $(AWS_SECRET_ACCESS_KEY)
-        aws configure set default.region $(awsRegion)
-      displayName: Configure AWS CLI
-
     # Step 2: Login to AWS ECR
     - script: |
         aws ecr get-login-password --region $(awsRegion) \
