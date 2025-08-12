@@ -1,7 +1,3 @@
-# Docker
-# Build a Docker image
-# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
-
 trigger:
 - main
 
@@ -9,21 +5,42 @@ resources:
 - repo: self
 
 variables:
-  tag: '$(Build.BuildId)'
+  awsRegion: 'us-east-1'
+  awsAccountId: '713881790273'
+  ecrRepository: 'testrepo'   # Updated to your repo name
+  imageTag: '$(Build.BuildId)'
 
 stages:
 - stage: Build
-  displayName: Build image
+  displayName: Build and Push to AWS ECR
   jobs:
   - job: Build
-    displayName: Build
+    displayName: Build on EC2 Agent
     pool:
-      name: ec2
+      name: ec2  # Your EC2 self-hosted agent pool
     steps:
-    - task: Docker@2
-      displayName: Build an image
-      inputs:
-        command: build
-        dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-        tags: |
-          $(tag)
+    - checkout: self
+
+    # Step 1: Configure AWS credentials (stored securely in Azure DevOps)
+    - script: |
+        aws configure set aws_access_key_id $(AWS_ACCESS_KEY_ID)
+        aws configure set aws_secret_access_key $(AWS_SECRET_ACCESS_KEY)
+        aws configure set default.region $(awsRegion)
+      displayName: Configure AWS CLI
+
+    # Step 2: Login to AWS ECR
+    - script: |
+        aws ecr get-login-password --region $(awsRegion) \
+          | docker login --username AWS --password-stdin $(awsAccountId).dkr.ecr.$(awsRegion).amazonaws.com
+      displayName: Login to AWS ECR
+
+    # Step 3: Build Docker image
+    - script: |
+        docker build -t $(ecrRepository):$(imageTag) -f $(Build.SourcesDirectory)/Dockerfile .
+      displayName: Build Docker Image
+
+    # Step 4: Tag and Push to AWS ECR
+    - script: |
+        docker tag $(ecrRepository):$(imageTag) $(awsAccountId).dkr.ecr.$(awsRegion).amazonaws.com/$(ecrRepository):$(imageTag)
+        docker push $(awsAccountId).dkr.ecr.$(awsRegion).amazonaws.com/$(ecrRepository):$(imageTag)
+      displayName: Push Docker Image to AWS ECR
